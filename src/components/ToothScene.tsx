@@ -4,8 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 const DRACO_DECODER  = 'https://www.gstatic.com/draco/versioned/decoders/1.5.5/';
-const PARTICLE_COUNT = 4000;
-const SIZE_PX        = 52;
+const PARTICLE_COUNT = 5000;
+const SIZE_PX        = 56;
 
 const VERT = `
   uniform float uSize;
@@ -22,32 +22,33 @@ const FRAG = `
   void main() {
     vec2 uv = gl_PointCoord - 0.5;
     if (length(uv) > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.1, length(uv)) * uOpacity;
+    float alpha = smoothstep(0.5, 0.08, length(uv)) * uOpacity;
     gl_FragColor = vec4(uColor, alpha);
   }
 `;
 
 const ToothScene = () => {
-  const mountRef  = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);  // csak betöltés után látható
+  const mountRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setClearColor(0x000000, 0);  // teljesen átlátszó háttér
+    renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(SIZE_PX, SIZE_PX);
     Object.assign(renderer.domElement.style, {
       display: 'block',
-      width:   `${SIZE_PX}px`,
-      height:  `${SIZE_PX}px`,
+      width:  `${SIZE_PX}px`,
+      height: `${SIZE_PX}px`,
     });
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const cam   = new THREE.OrthographicCamera(-0.6, 0.6, 0.6, -0.6, 0.1, 10);
+    // OrthographicCamera — nem torzít kicsi méretben
+    const cam = new THREE.OrthographicCamera(-0.65, 0.65, 0.65, -0.65, 0.1, 10);
     cam.position.set(0, 0, 3);
 
     const positions = new Float32Array(PARTICLE_COUNT * 3);
@@ -56,15 +57,15 @@ const ToothScene = () => {
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
-        uColor:   { value: new THREE.Color('#8899cc') },
-        uOpacity: { value: 0.85 },
-        uSize:    { value: 1.2 },
+        uColor:   { value: new THREE.Color('#99aadd') },
+        uOpacity: { value: 0.9 },
+        uSize:    { value: 1.4 },
       },
       vertexShader:   VERT,
       fragmentShader: FRAG,
       transparent:    true,
       depthWrite:     false,
-      blending:       THREE.NormalBlending,
+      blending:       THREE.AdditiveBlending,
     });
 
     const group = new THREE.Group();
@@ -83,7 +84,6 @@ const ToothScene = () => {
       '/sajat-fogam.glb',
       (gltf) => {
         const verts: THREE.Vector3[] = [];
-
         gltf.scene.traverse((child) => {
           const mesh = child as THREE.Mesh;
           if (!mesh.isMesh) return;
@@ -91,7 +91,6 @@ const ToothScene = () => {
           const pos   = mesh.geometry.attributes.position;
           const index = mesh.geometry.index;
           const wp    = new THREE.Vector3();
-
           if (index) {
             for (let i = 0; i < index.count; i++) {
               wp.fromBufferAttribute(pos, index.getX(i)).applyMatrix4(mesh.matrixWorld);
@@ -105,7 +104,7 @@ const ToothScene = () => {
           }
         });
 
-        if (!verts.length) { console.warn('ToothScene: üres GLB'); return; }
+        if (!verts.length) { console.warn('ToothScene: ures GLB'); return; }
 
         let minX = Infinity, maxX = -Infinity;
         let minY = Infinity, maxY = -Infinity;
@@ -119,19 +118,19 @@ const ToothScene = () => {
         const cy   = (minY + maxY) / 2;
         const cz   = (minZ + maxZ) / 2;
         const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
-        const sc   = 1.0 / span;
+        const sc   = 1.1 / span;
 
         const posArr = geometry.attributes.position.array as Float32Array;
         for (let i = 0; i < PARTICLE_COUNT; i++) {
           const v = verts[Math.floor(Math.random() * verts.length)];
-          posArr[i * 3]     = (v.x - cx) * sc;
-          posArr[i * 3 + 1] = (v.y - cy) * sc;
-          posArr[i * 3 + 2] = (v.z - cz) * sc;
+          posArr[i*3]   = (v.x - cx) * sc;
+          posArr[i*3+1] = (v.y - cy) * sc;
+          posArr[i*3+2] = (v.z - cz) * sc;
         }
         geometry.attributes.position.needsUpdate = true;
         loaded = true;
-        setVisible(true);  // ← csak most jelenik meg
-        console.log('✅ ToothScene betöltve');
+        setVisible(true);
+        console.log('ToothScene betoltve');
       },
       undefined,
       (err) => console.error('ToothScene hiba:', err)
@@ -139,17 +138,14 @@ const ToothScene = () => {
 
     const tick = () => {
       animId = requestAnimationFrame(tick);
-      if (loaded) group.rotation.y += 0.012;
+      if (loaded) group.rotation.y += 0.011;
       renderer.render(scene, cam);
     };
     tick();
 
     return () => {
       cancelAnimationFrame(animId);
-      renderer.dispose();
-      geometry.dispose();
-      material.dispose();
-      draco.dispose();
+      renderer.dispose(); geometry.dispose(); material.dispose(); draco.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
   }, []);
@@ -159,14 +155,14 @@ const ToothScene = () => {
       ref={mountRef}
       style={{
         position:      'fixed',
-        bottom:        '12px',
-        left:          '12px',
+        bottom:        '10px',
+        left:          '10px',
         width:         `${SIZE_PX}px`,
         height:        `${SIZE_PX}px`,
-        zIndex:        50,
+        zIndex:        100,
         pointerEvents: 'none',
-        opacity:       visible ? 1 : 0,          // ← betöltés előtt láthatatlan
-        transition:    'opacity 0.6s ease',       // ← szépen befade-el
+        opacity:       visible ? 1 : 0,
+        transition:    'opacity 1s ease',
       }}
     />
   );
