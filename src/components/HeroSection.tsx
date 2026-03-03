@@ -1,42 +1,7 @@
 import { motion, useMotionValue, useSpring } from 'framer-motion';
-import { Suspense, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Canvas } from '@react-three/fiber';
-import { useGLTF, Environment, Center, OrbitControls } from '@react-three/drei';
-import * as THREE from 'three';
+import { useRef } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import NoiseOverlay from './NoiseOverlay';
-
-
-function PremiumTooth() {
-  const { scene } = useGLTF('/sajat-fogam.glb');
-
-  useEffect(() => {
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.material = new THREE.MeshPhysicalMaterial({
-          color: "#ffffff",
-          roughness: 0.15,
-          metalness: 0.1,
-          transmission: 0.1,
-          thickness: 2.0,
-          clearcoat: 1.0,
-          clearcoatRoughness: 0.1,
-        });
-      }
-    });
-  }, [scene]);
-
-  return (
-    <Center>
-      <primitive
-        object={scene}
-        scale={0.00004}
-        rotation={[0.2, -0.4, 0]}
-      />
-    </Center>
-  );
-}
 
 function MaskReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const reduced = useReducedMotion();
@@ -80,18 +45,13 @@ function MagneticLink({
     my.set((e.clientY - (rect.top + rect.height / 2)) * 0.32);
   };
 
-  const handleMouseLeave = () => {
-    mx.set(0);
-    my.set(0);
-  };
-
   return (
     <motion.a
       ref={ref}
       href={href}
       style={{ x: springX, y: springY, display: 'inline-flex' }}
       onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      onMouseLeave={() => { mx.set(0); my.set(0); }}
       whileHover={{ scale: 1.06 }}
       transition={{ type: 'spring', stiffness: 300, damping: 22 }}
       className={className}
@@ -102,42 +62,12 @@ function MagneticLink({
 }
 
 const HeroSection = () => {
-  const navigate = useNavigate();
   const reduced = useReducedMotion();
 
   return (
     <section className="section-dark relative min-h-screen flex items-start overflow-hidden">
-
-      {/* Noise texture */}
       <NoiseOverlay />
 
-      {/* 3D modell konténer */}
-      <div
-        className="absolute inset-0 lg:left-[40%] z-10 pointer-events-auto cursor-pointer group flex items-center justify-center"
-        onClick={() => navigate('/hidmunka')}
-        title="Kattints a részletes bemutatóhoz!"
-      >
-        <div className="absolute inset-0 z-20" />
-        <div className="w-full h-full transition-transform duration-500 group-hover:scale-[1.05]">
-          <Canvas camera={{ position: [0, 0, 10], fov: 40 }} dpr={[1, 1.5]}>
-            <Environment preset="city" />
-            <ambientLight intensity={1.2} />
-            <spotLight position={[10, 20, 10]} intensity={2.5} penumbra={1} />
-            <Suspense fallback={null}>
-              <PremiumTooth />
-            </Suspense>
-            <OrbitControls
-              enableZoom={false}
-              enablePan={false}
-              enableRotate={false}
-              autoRotate
-              autoRotateSpeed={1.5}
-            />
-          </Canvas>
-        </div>
-      </div>
-
-      {/* Tartalom blokk */}
       <div className="w-full px-8 md:px-16 lg:px-24 pt-28 md:pt-36 pb-20 relative z-20 pointer-events-none">
         <div className="max-w-4xl pointer-events-auto">
 
@@ -188,12 +118,10 @@ const HeroSection = () => {
         </div>
       </div>
 
-      {/* Scroll indikátor */}
       <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center pointer-events-none">
         <span className="text-[8px] tracking-[0.5em] uppercase text-white/10 mb-3 ml-1">Görgess</span>
         <div className="w-[1px] h-10 bg-gradient-to-b from-white/20 via-transparent to-transparent" />
       </div>
-
     </section>
   );
 };
