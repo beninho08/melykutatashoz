@@ -1,21 +1,10 @@
 /**
- * GlobOrb.tsx – FIX: immediateRender: false + gsap.set() footer init
+ * GlobOrb.tsx – FIX: fog nagyobb + lassabb morph + footer hamarabb
  *
- * ROOT CAUSE FIX:
- *  - fromTo() + immediateRender:true alapból AZONNAL ráírja a "from" értékeket
- *  - Ezért a footer fromTo initkor már beállítja screenY=height*1.2, morph=0
- *    MIELŐTT a hero animáció elkezdődne
- *  - Megoldás: gsap.set() a footer onEnter-ben + to() tween + immediateRender: false
- *
- * LOGIKA:
- *  morph 1.0 = fog alak  (toothPos)
- *  morph 0.0 = gömb alak (spherePos)
- *
- * FLOW:
- *  1. GLB betölt → fog látszik hero jobb oldalán (state.morph=1, opacity=0.5)
- *  2. Hero scroll: fog áll → fog→gömb → sarokba fade
- *  3. Footer scroll: gsap.set() viewport alatti pozíció + gömb → to() footer közép + fog
- *  4. Footer végig visible → fog FIX MARAD
+ * Változtatások:
+ *  - Fog méret: 1.2 → 1.5 (nagyobb)
+ *  - Hero fázisok: fog díszlet hosszabb, morph lassúbb, hamarabb véget ér
+ *  - Footer trigger: 'top 95%' → 'top 85%' (hamarabb kezdődik)
  */
 
 import { useEffect, useRef } from 'react';
@@ -132,11 +121,11 @@ const GlobOrb = () => {
     group.add(new THREE.Points(geometry, material));
     scene.add(group);
 
-    // ── STATE: GLB betöltés előtt beállítjuk a hero pozíciót ──
+    // ── STATE ──
     const state = {
       screenX:  sizes.width  * 0.72,
       screenY:  sizes.height * 0.46,
-      scale:    1.2,
+      scale:    1.5,   // !! Nagyobb fog (1.2 → 1.5)
       morph:    1.0,
       opacity:  0.0,
     };
@@ -241,11 +230,8 @@ const GlobOrb = () => {
         glbLoaded = true;
 
         snapToState();
-
-        // !! KRITIKUS: ScrollTrigger.refresh() a GLB után
         ScrollTrigger.refresh();
 
-        // Fade-in
         gsap.to(state, {
           opacity: 0.50,
           duration: 1.4,
@@ -257,11 +243,16 @@ const GlobOrb = () => {
     );
 
     // ────────────────────────────────────────────────────────────────────────
-    // GSAP ScrollTriggers – CSAK to() tweeneket használunk!
+    // GSAP ScrollTriggers
     // ────────────────────────────────────────────────────────────────────────
     const ctx = gsap.context(() => {
 
       // ── HERO ──────────────────────────────────────────────────────────────
+      // Új fázisok:
+      //  1. Fog áll, forog (0-50%) → hosszabb idő
+      //  2. Fog → gömb LASSÚ morph (50-80%)
+      //  3. Sarokba + fade (80-100%) → rövidebb, hamarabb véget ér
+
       const heroTl = gsap.timeline({
         scrollTrigger: {
           trigger: '#hero',
@@ -272,57 +263,53 @@ const GlobOrb = () => {
         },
       });
 
-      // Fázis 1: fog marad
+      // Fázis 1: fog marad (50%)
       heroTl.to(state, {
         screenX:  () => sizes.width  * 0.72,
         screenY:  () => sizes.height * 0.46,
-        scale:    1.2,
+        scale:    1.5,   // nagyobb fog
         morph:    1.0,
         opacity:  0.50,
-        duration: 0.40,
+        duration: 0.50,
         ease:     'none',
       });
 
-      // Fázis 2: fog → gömb
+      // Fázis 2: fog → gömb LASSÚ (30%)
       heroTl.to(state, {
         screenX:  () => sizes.width  * 0.72,
         screenY:  () => sizes.height * 0.46,
-        scale:    1.05,
+        scale:    1.3,
         morph:    0.0,
         opacity:  0.45,
-        duration: 0.32,
-        ease:     'power2.inOut',
+        duration: 0.30,
+        ease:     'power1.inOut',  // lassúbb easing
       });
 
-      // Fázis 3: sarokba + eltűnik
+      // Fázis 3: sarokba + eltűnik (20%)
       heroTl.to(state, {
         screenX:  () => getCorner().x,
         screenY:  () => getCorner().y,
         scale:    0.09,
         morph:    0.0,
         opacity:  0.0,
-        duration: 0.28,
+        duration: 0.20,
         ease:     'power3.inOut',
       });
 
       // ── FOOTER ────────────────────────────────────────────────────────────
-      // KRITIKUS FIX:
-      //  - onEnter-ben gsap.set() beállítja az induló állapotot
-      //  - Ezután a to() tween animál a footer középre
-      //  - Így NEM írja felül a hero state-et initkor!
+      // Start: 'top 85%' → hamarabb kezdődik (volt 95%)
 
       const footerTl = gsap.timeline({
         scrollTrigger: {
           trigger:  'footer',
-          start:    'top 95%',
-          end:      'top 20%',
+          start:    'top 85%',   // !! Hamarabb
+          end:      'top 15%',
           scrub:    1.8,
           invalidateOnRefresh: true,
           onEnter: () => {
-            // ELŐBB beállítjuk az induló állapotot (nem tween, csak set)
             gsap.set(state, {
               screenX: sizes.width * 0.5,
-              screenY: sizes.height * 1.20, // viewport alatt
+              screenY: sizes.height * 1.25,  // kicsit mélyebben indul
               scale:   0.12,
               morph:   0.0,
               opacity: 0.0,
@@ -334,7 +321,7 @@ const GlobOrb = () => {
       footerTl.to(state, {
         screenX:  () => sizes.width * 0.5,
         screenY:  () => getFooterCenter().y,
-        scale:    1.15,
+        scale:    1.4,   // footer fog is nagyobb
         morph:    1.0,
         opacity:  0.50,
         ease:     'power2.out',
@@ -428,7 +415,7 @@ const GlobOrb = () => {
       if (scrollY < 80) {
         state.screenX = sizes.width  * 0.72;
         state.screenY = sizes.height * 0.46;
-        state.scale   = 1.2;
+        state.scale   = 1.5;
         state.morph   = 1.0;
         snapToState();
       }

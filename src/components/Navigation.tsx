@@ -4,16 +4,10 @@ import { useLocation } from 'react-router-dom';
 import logo from '@/assets/logo.png';
 
 /**
- * Navigation
+ * Navigation - NAVBAR SZÍNVÁLTÁS FIX
  *
- * Navbar szín logika:
- *  - A hero section-nek van section-dark class-a és id="hero"
- *  - Amíg a #hero elem látható a viewport tetején → fehér szöveg, transparent háttér
- *  - Ha elhagyjuk a sötét szekciót → sötét szöveg, világos háttér
- *
- * FONTOS: NEM scrollY > 50 alapú!
- *  A Lenis smooth scroll + GSAP pin megváltoztatja a valódi scrollY értékét,
- *  ezért section class alapú detekciót használunk.
+ * FONTOS: A navbar CSAK akkor váltson világosra amikor a hero TELJESEN elhagyta
+ * a viewport-ot (hero bottom <= 0). Amíg a hero bármelyik része látható, maradjon fehér.
  */
 const Navigation = () => {
   const [isDark, setIsDark] = useState(true);
@@ -21,20 +15,16 @@ const Navigation = () => {
   const isBridge  = location.pathname === '/hidmunka';
 
   const checkSection = useCallback(() => {
-    // 1. Mindig nézzük a #hero elemet először (leggyakoribb eset)
+    // 1. HERO elemét nézzük először
     const hero = document.getElementById('hero');
     if (hero) {
       const rect = hero.getBoundingClientRect();
-      // Hero teteje még a viewport-ban (akár sticky, akár normál)
-      // rect.top <= 64 (navbar magassága) ÉS rect.bottom > 64
-      if (rect.top <= 64 && rect.bottom > 64) {
+      // Amíg a hero BOTTOM > 0 (még látszik részben), marad sötét
+      if (rect.bottom > 0) {
         setIsDark(true);
         return;
       }
-      // Ha a hero teljesen a viewport felett van, már nem sötét
-      if (rect.bottom <= 0) {
-        // De lehet más sötét section is alatta
-      }
+      // Hero teljesen elment → ellenőrizzük más sectionokat
     }
 
     // 2. Általános section scan
@@ -50,21 +40,15 @@ const Navigation = () => {
       }
     });
 
-    // 3. Ha semmilyen section nem fedi a navbart (pl. közte van valami)
+    // 3. Ha semmilyen section nem fedi a navbart
     if (!found) {
-      // Ha a hero teljesen felett van, valószínűleg világos section következik
-      if (hero) {
-        const rect = hero.getBoundingClientRect();
-        setIsDark(rect.bottom > 64); // ha még részben látszik, sötét
-      }
+      setIsDark(false); // alapértelmezés: világos
     }
   }, []);
 
   useEffect(() => {
-    // Első futás
     checkSection();
 
-    // Scroll eventi: mindkét típus (Lenis és natív)
     window.addEventListener('scroll',   checkSection, { passive: true });
     document.addEventListener('scroll', checkSection, { passive: true });
 
@@ -74,7 +58,6 @@ const Navigation = () => {
     };
   }, [checkSection]);
 
-  // Bridge oldalon mindig világos
   const dark = isDark && !isBridge;
 
   const textColor  = dark ? 'text-white'                             : 'text-slate-900';
@@ -87,7 +70,6 @@ const Navigation = () => {
     >
       <div className="w-full px-6 md:px-10 py-4 flex items-center justify-between">
 
-        {/* Logo */}
         <div className="flex items-center">
           <a
             href="/"
@@ -111,7 +93,6 @@ const Navigation = () => {
           </a>
         </div>
 
-        {/* Nav linkek */}
         <div className="hidden md:flex items-center gap-10">
           {!isBridge &&
             ['Portfólió', 'Rólam', 'Kapcsolat'].map((item) => (
