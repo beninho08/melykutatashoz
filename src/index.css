@@ -1,0 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
+
+    --card: 0 0% 97%;
+    --card-foreground: 0 0% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
+
+    --primary: 0 0% 8%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 15%;
+
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 8%;
+
+    --radius: 0.75rem;
+
+    /* Section-specific */
+    --section-dark-bg: 220 40% 13%;
+    --section-dark-fg: 210 20% 95%;
+    --section-dark-muted: 215 15% 50%;
+    --section-dark-border: 220 30% 22%;
+    --section-dark-card: 220 35% 18%;
+
+    --section-light-bg: 0 0% 98%;
+    --section-light-fg: 0 0% 8%;
+    --section-light-muted: 0 0% 45%;
+    --section-light-border: 0 0% 90%;
+    --section-light-card: 0 0% 94%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Section themes */
+.section-dark {
+  background-color: hsl(var(--section-dark-bg));
+  color: hsl(var(--section-dark-fg));
+  position: relative;
+}
+
+.section-dark .section-muted {
+  color: hsl(var(--section-dark-muted));
+}
+
+.section-dark .section-border {
+  border-color: hsl(var(--section-dark-border));
+}
+
+.section-dark .section-card {
+  background-color: hsl(var(--section-dark-card));
+}
+
+/* Rounded transition: dark section bottom curves into light */
+.section-dark + .section-light {
+  position: relative;
+}
+
+.section-dark + .section-light::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: hsl(var(--section-light-bg));
+  border-radius: 60px 60px 0 0;
+  z-index: 10;
+}
+
+/* Rounded transition: light section bottom curves into dark */
+.section-light + .section-dark {
+  position: relative;
+}
+
+.section-light + .section-dark::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: hsl(var(--section-dark-bg));
+  border-radius: 60px 60px 0 0;
+  z-index: 10;
+}
+
+.section-light {
+  background-color: hsl(var(--section-light-bg));
+  color: hsl(var(--section-light-fg));
+  position: relative;
+}
+
+.section-light .section-muted {
+  color: hsl(var(--section-light-muted));
+}
+
+.section-light .section-border {
+  border-color: hsl(var(--section-light-border));
+}
+
+.section-light .section-card {
+  background-color: hsl(var(--section-light-card));
+}
+
+/* AboutSection: nincs lekerekített átmenet (gap / más kék elkerülésére) */
+.no-curve::before {
+  display: none !important;
+}
+
+
