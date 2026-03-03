@@ -1,68 +1,93 @@
 import { motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import logo from '@/assets/logo.png';
 
+/**
+ * Navigation
+ *
+ * Navbar szín logika:
+ *  - A hero section-nek van section-dark class-a és id="hero"
+ *  - Amíg a #hero elem látható a viewport tetején → fehér szöveg, transparent háttér
+ *  - Ha elhagyjuk a sötét szekciót → sötét szöveg, világos háttér
+ *
+ * FONTOS: NEM scrollY > 50 alapú!
+ *  A Lenis smooth scroll + GSAP pin megváltoztatja a valódi scrollY értékét,
+ *  ezért section class alapú detekciót használunk.
+ */
 const Navigation = () => {
-  const [isInDarkSection, setIsInDarkSection] = useState(true);
-  const location = useLocation();
-  const isBridgePage = location.pathname === '/hidmunka';
+  const [isDark, setIsDark] = useState(true);
+  const location  = useLocation();
+  const isBridge  = location.pathname === '/hidmunka';
 
-  useEffect(() => {
-    const handleScroll = () => {
-      // A hero section magassága = 100vh, amíg benne vagyunk sötét
-      // A pin miatt NE scrollY > 50-et nézzük, hanem a section class-t
-      const sections = document.querySelectorAll('section');
-      const navY = 64; // navbar magassága közepe
-      let inDark = true;
-
-      sections.forEach((section) => {
-        const rect = section.getBoundingClientRect();
-        if (rect.top <= navY && rect.bottom > navY) {
-          inDark = section.classList.contains('section-dark');
-        }
-      });
-
-      // Ha egyik section sem fedi a navbart, maradjon az utolsó állapot
-      // (pl. ha a hero még látható)
-      const heroSection = document.querySelector('#hero');
-      if (heroSection) {
-        const heroRect = heroSection.getBoundingClientRect();
-        // Hero teteje még látható (pin esetén is)
-        if (heroRect.top <= 0 && heroRect.bottom > navY) {
-          inDark = true;
-        }
+  const checkSection = useCallback(() => {
+    // 1. Mindig nézzük a #hero elemet először (leggyakoribb eset)
+    const hero = document.getElementById('hero');
+    if (hero) {
+      const rect = hero.getBoundingClientRect();
+      // Hero teteje még a viewport-ban (akár sticky, akár normál)
+      // rect.top <= 64 (navbar magassága) ÉS rect.bottom > 64
+      if (rect.top <= 64 && rect.bottom > 64) {
+        setIsDark(true);
+        return;
       }
+      // Ha a hero teljesen a viewport felett van, már nem sötét
+      if (rect.bottom <= 0) {
+        // De lehet más sötét section is alatta
+      }
+    }
 
-      setIsInDarkSection(inDark);
-    };
+    // 2. Általános section scan
+    const navMidY  = 64;
+    let   found    = false;
+    const sections = document.querySelectorAll('section');
 
-    // Első futás
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    // Lenis-szel is szükséges lehet
-    document.addEventListener('scroll', handleScroll, { passive: true });
+    sections.forEach((section) => {
+      const rect = section.getBoundingClientRect();
+      if (rect.top <= navMidY && rect.bottom > navMidY) {
+        found = true;
+        setIsDark(section.classList.contains('section-dark'));
+      }
+    });
 
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('scroll', handleScroll);
-    };
+    // 3. Ha semmilyen section nem fedi a navbart (pl. közte van valami)
+    if (!found) {
+      // Ha a hero teljesen felett van, valószínűleg világos section következik
+      if (hero) {
+        const rect = hero.getBoundingClientRect();
+        setIsDark(rect.bottom > 64); // ha még részben látszik, sötét
+      }
+    }
   }, []);
 
-  const isDark = isInDarkSection && !isBridgePage;
-  const textColor  = isDark ? 'text-white' : 'text-slate-900';
-  const mutedColor = isDark ? 'text-white/60 hover:text-white' : 'text-slate-600 hover:text-slate-900';
+  useEffect(() => {
+    // Első futás
+    checkSection();
 
-  // Navbar háttér: csak akkor kap hátteret ha NEM a sötét hero tetején vagyunk
-  // Nem scrollY-alapú, hanem section-alapú!
-  const bgClass = isDark
-    ? 'bg-transparent'
-    : 'bg-[hsl(0,0%,97%)]/90 backdrop-blur-md';
+    // Scroll eventi: mindkét típus (Lenis és natív)
+    window.addEventListener('scroll',   checkSection, { passive: true });
+    document.addEventListener('scroll', checkSection, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll',   checkSection);
+      document.removeEventListener('scroll', checkSection);
+    };
+  }, [checkSection]);
+
+  // Bridge oldalon mindig világos
+  const dark = isDark && !isBridge;
+
+  const textColor  = dark ? 'text-white'                             : 'text-slate-900';
+  const mutedColor = dark ? 'text-white/60 hover:text-white'         : 'text-slate-600 hover:text-slate-900';
+  const bgClass    = dark ? 'bg-transparent'                         : 'bg-[hsl(0,0%,97%)]/90 backdrop-blur-md';
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${bgClass}`}>
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${bgClass}`}
+    >
       <div className="w-full px-6 md:px-10 py-4 flex items-center justify-between">
 
+        {/* Logo */}
         <div className="flex items-center">
           <a
             href="/"
@@ -74,7 +99,8 @@ const Navigation = () => {
               alt="Á"
               className="h-10 md:h-14 w-auto mx-1 -translate-y-1.5 md:-translate-y-2"
               style={{
-                filter: isDark ? 'brightness(0) invert(1)' : 'brightness(0)',
+                filter: dark ? 'brightness(0) invert(1)' : 'brightness(0)',
+                transition: 'filter 0.5s ease',
               }}
               initial={{ scale: 0, rotate: -20 }}
               animate={{ scale: 1, rotate: 0 }}
@@ -85,17 +111,16 @@ const Navigation = () => {
           </a>
         </div>
 
+        {/* Nav linkek */}
         <div className="hidden md:flex items-center gap-10">
-          {!isBridgePage &&
+          {!isBridge &&
             ['Portfólió', 'Rólam', 'Kapcsolat'].map((item) => (
               <a
                 key={item}
                 href={`/#${
-                  item === 'Portfólió'
-                    ? 'portfolio'
-                    : item === 'Rólam'
-                    ? 'about'
-                    : 'contact'
+                  item === 'Portfólió' ? 'portfolio'
+                  : item === 'Rólam'   ? 'about'
+                  : 'contact'
                 }`}
                 className={`text-[10px] font-semibold tracking-[0.3em] uppercase transition-colors duration-500 ${mutedColor}`}
               >
@@ -103,6 +128,7 @@ const Navigation = () => {
               </a>
             ))}
         </div>
+
       </div>
     </nav>
   );
