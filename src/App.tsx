@@ -6,9 +6,13 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import Lenis from "lenis";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import BridgePage from "./pages/BridgePage";
+
+gsap.registerPlugin(ScrollTrigger);
 
 const queryClient = new QueryClient();
 
@@ -21,21 +25,28 @@ function LenisProvider({ children }: { children: React.ReactNode }) {
       wheelMultiplier: 0.9,
       touchMultiplier: 1.5,
     });
-    let rafId: number;
-    function raf(time: number) {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    }
-    rafId = requestAnimationFrame(raf);
+
+    // Lenis scroll pozícióját átadjuk a GSAP ScrollTrigger-nek
+    lenis.on('scroll', () => {
+      ScrollTrigger.update();
+    });
+
+    // GSAP ticker-be kötjük a Lenis raf-ot — NEM kell külön requestAnimationFrame
+    const tickerFn = (time: number) => {
+      lenis.raf(time * 1000);
+    };
+    gsap.ticker.add(tickerFn);
+    gsap.ticker.lagSmoothing(0);
+
     return () => {
-      cancelAnimationFrame(rafId);
+      gsap.ticker.remove(tickerFn);
       lenis.destroy();
     };
   }, []);
+
   return <>{children}</>;
 }
 
-// Az átmeneti panel komponens
 const PageTransitionOverlay = () => (
   <motion.div
     initial={{ scaleY: 0 }}
@@ -56,7 +67,6 @@ const PageTransitionOverlay = () => (
   </motion.div>
 );
 
-// Oldalak wrapper — itt van az AnimatePresence
 function AnimatedRoutes() {
   const location = useLocation();
   return (
