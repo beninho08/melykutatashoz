@@ -1,27 +1,32 @@
+import { lazy, Suspense } from "react";
 import Navigation from "../components/Navigation";
 import HeroSection from "../components/HeroSection";
-import ToothScene from "../components/ToothScene";
 import PortfolioSection from "../components/PortfolioSection";
 import AboutSection from "../components/AboutSection";
 import ContactSection from "../components/ContactSection";
 import Footer from "../components/Footer";
+import TestimonialsSection from "../components/TestimonialsSection";
+import NoiseOverlay from "../components/NoiseOverlay";
+
+const ToothScene = lazy(() => import("../components/ToothScene"));
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-white overflow-x-hidden flex flex-col antialiased">
       <Navigation />
-      
-      {/* Sötétkék rész: Hero és a 3D fog modell — NoiseOverlay csak AboutSection-ben (kevesebb lag) */}
+
       <div className="relative">
         <HeroSection />
-        <ToothScene />
+        <Suspense fallback={null}>
+          <ToothScene />
+        </Suspense>
       </div>
 
-      {/* JAVÍTÁS: Eltávolítottam a felesleges <section> burkolókat, 
-          így megszűnnek a duplázott fehér sávok. 
-          A '-mt-[1px]' biztosítja a résmentes illesztést a Hero aljához. */}
-      <main className="relative z-10 bg-white -mt-[1px]">
+      <main className="relative z-10 -mt-[1px] overflow-hidden" style={{ backgroundColor: 'hsl(0, 0%, 97%)' }}>
+        {/* Noise a fehér területre */}
+        <NoiseOverlay />
         <PortfolioSection />
+        <TestimonialsSection />
         <AboutSection />
         <ContactSection />
       </main>

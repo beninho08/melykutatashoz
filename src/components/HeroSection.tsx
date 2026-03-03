@@ -2,9 +2,11 @@ import { motion, useMotionValue, useSpring } from 'framer-motion';
 import { Suspense, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Canvas } from '@react-three/fiber';
-// KIVETTÜK A BOUNDS-OT! Visszatértünk a sima Center-hez.
 import { useGLTF, Environment, Center, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import NoiseOverlay from './NoiseOverlay';
+
 
 function PremiumTooth() {
   const { scene } = useGLTF('/sajat-fogam.glb');
@@ -27,27 +29,27 @@ function PremiumTooth() {
 
   return (
     <Center>
-      {/* ITT TUDOD ÁLLÍTANI A MÉRETET! 
-        Növeld a számot (pl. 0.00006), ha nagyobbat akarsz.
-        Csökkentsd (pl. 0.00002), ha kisebbet.
-      */}
-      <primitive 
-        object={scene} 
-        scale={0.00004} 
-        rotation={[0.2, -0.4, 0]} 
+      <primitive
+        object={scene}
+        scale={0.00004}
+        rotation={[0.2, -0.4, 0]}
       />
     </Center>
   );
 }
 
-// --- Prémium mask-reveal: a szöveg egy maszk mögül úszik fel ---
 function MaskReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const reduced = useReducedMotion();
   return (
     <div style={{ overflow: 'hidden', display: 'block' }}>
       <motion.div
-        initial={{ y: '108%', rotateX: 8 }}
+        initial={{ y: reduced ? '0%' : '108%', rotateX: reduced ? 0 : 8 }}
         animate={{ y: '0%', rotateX: 0 }}
-        transition={{ type: 'spring', stiffness: 52, damping: 16, delay }}
+        transition={
+          reduced
+            ? { duration: 0 }
+            : { type: 'spring', stiffness: 52, damping: 16, delay }
+        }
         style={{ transformOrigin: 'bottom center' }}
       >
         {children}
@@ -56,7 +58,6 @@ function MaskReveal({ children, delay = 0 }: { children: React.ReactNode; delay?
   );
 }
 
-// --- Magnetic hover gomb: a kurzor felé vonzza magát ---
 function MagneticLink({
   href,
   className,
@@ -102,34 +103,39 @@ function MagneticLink({
 
 const HeroSection = () => {
   const navigate = useNavigate();
+  const reduced = useReducedMotion();
 
   return (
     <section className="section-dark relative min-h-screen flex items-start overflow-hidden">
-      
-      {/* --- A 3D MODELL KONTÉNER (KATTINTHATÓ ÜVEGRÉTEGGEL) --- */}
-      <div 
+
+      {/* Noise texture */}
+      <NoiseOverlay />
+
+      {/* 3D modell konténer */}
+      <div
         className="absolute inset-0 lg:left-[40%] z-10 pointer-events-auto cursor-pointer group flex items-center justify-center"
         onClick={() => navigate('/hidmunka')}
         title="Kattints a részletes bemutatóhoz!"
       >
         <div className="absolute inset-0 z-20" />
-        
         <div className="w-full h-full transition-transform duration-500 group-hover:scale-[1.05]">
-          {/* Kamera fix, középre néz */}
           <Canvas camera={{ position: [0, 0, 10], fov: 40 }} dpr={[1, 1.5]}>
             <Environment preset="city" />
             <ambientLight intensity={1.2} />
             <spotLight position={[10, 20, 10]} intensity={2.5} penumbra={1} />
-            
             <Suspense fallback={null}>
               <PremiumTooth />
             </Suspense>
-            
-            <OrbitControls enableZoom={false} enablePan={false} enableRotate={false} autoRotate autoRotateSpeed={1.5} />
+            <OrbitControls
+              enableZoom={false}
+              enablePan={false}
+              enableRotate={false}
+              autoRotate
+              autoRotateSpeed={1.5}
+            />
           </Canvas>
         </div>
       </div>
-      {/* --- 3D RÉSZ VÉGE --- */}
 
       {/* Tartalom blokk */}
       <div className="w-full px-8 md:px-16 lg:px-24 pt-28 md:pt-36 pb-20 relative z-20 pointer-events-none">
@@ -149,31 +155,31 @@ const HeroSection = () => {
               <span className="block">és Művészet.</span>
             </MaskReveal>
           </h1>
-          
+
           <motion.p
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: reduced ? 0 : 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.9, delay: reduced ? 0 : 0.7, ease: [0.22, 1, 0.36, 1] }}
             className="section-muted mt-8 text-base md:text-lg max-w-md font-light leading-[1.6] tracking-wide text-white/60"
           >
-            Egyedi fogpótlások és esztétikai megoldások 
+            Egyedi fogpótlások és esztétikai megoldások
             <br className="hidden md:block" /> a legmodernebb technológiával.
           </motion.p>
-          
+
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: reduced ? 0 : 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.88, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.9, delay: reduced ? 0 : 0.88, ease: [0.22, 1, 0.36, 1] }}
             className="mt-12 flex flex-wrap gap-5"
           >
-            <MagneticLink 
-              href="#portfolio" 
+            <MagneticLink
+              href="#portfolio"
               className="items-center px-8 py-3 bg-white text-black rounded-full text-[10px] font-bold uppercase tracking-[0.2em] shadow-xl"
             >
               Munkáim megtekintése
             </MagneticLink>
-            <MagneticLink 
-              href="#contact" 
+            <MagneticLink
+              href="#contact"
               className="items-center px-8 py-3 border border-white/20 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] text-white/80 hover:bg-white/10 transition-colors"
             >
               Kapcsolat
@@ -182,10 +188,12 @@ const HeroSection = () => {
         </div>
       </div>
 
+      {/* Scroll indikátor */}
       <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center pointer-events-none">
         <span className="text-[8px] tracking-[0.5em] uppercase text-white/10 mb-3 ml-1">Görgess</span>
         <div className="w-[1px] h-10 bg-gradient-to-b from-white/20 via-transparent to-transparent" />
       </div>
+
     </section>
   );
 };

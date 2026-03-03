@@ -33,7 +33,6 @@ const ContactSection = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
-
     const result = contactSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -43,10 +42,8 @@ const ContactSection = () => {
       setErrors(fieldErrors);
       return;
     }
-
     setSending(true);
     try {
-      // TODO: Connect to Supabase edge function for email sending
       await new Promise((resolve) => setTimeout(resolve, 1000));
       toast({ title: 'Üzenet elküldve!', description: 'Hamarosan válaszolok.' });
       setForm({ name: '', email: '', message: '' });
@@ -57,9 +54,16 @@ const ContactSection = () => {
     }
   };
 
+  const inputClass = "w-full section-card rounded-xl px-5 py-4 text-sm outline-none focus:ring-2 focus:ring-black/10 transition-all duration-300";
+
   return (
     <section id="contact" className="section-light py-32 relative z-20">
       <div className="container mx-auto px-6 lg:px-16">
+        {/* Skip link a keyboardos navigációhoz */}
+        <a href="#contact-form" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-black text-white px-4 py-2 rounded-lg text-sm z-50">
+          Ugrás az űrlaphoz
+        </a>
+
         <div className="grid lg:grid-cols-2 gap-20">
           <div>
             <ScrollMaskReveal delay={0}>
@@ -82,55 +86,91 @@ const ContactSection = () => {
             >
               Kérdésed van, vagy szeretnél egyedi fogpótlást rendelni? Írj nekem, és hamarosan válaszolok.
             </motion.p>
+
+            {/* Kontakt info */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7, delay: 0.5 }}
+              className="mt-10 space-y-3"
+            >
+              <p className="text-sm section-muted">
+                <span className="font-semibold text-foreground">Telefon:</span> +36 30 123 4567
+              </p>
+              <p className="text-sm section-muted">
+                <span className="font-semibold text-foreground">Email:</span> info@dental2020.hu
+              </p>
+              <p className="text-sm section-muted">
+                <span className="font-semibold text-foreground">Cím:</span> 1234 Budapest, Példa utca 10.
+              </p>
+            </motion.div>
           </div>
 
           <motion.form
+            id="contact-form"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-50px' }}
             transition={{ duration: 0.7, delay: 0.2 }}
             onSubmit={handleSubmit}
-            className="space-y-6"
+            className="space-y-5"
+            aria-label="Kapcsolatfelvételi űrlap"
           >
             <div>
+              <label htmlFor="contact-name" className="block text-xs font-semibold tracking-widest uppercase mb-2 section-muted">
+                Neved *
+              </label>
               <input
+                id="contact-name"
                 type="text"
-                placeholder="Neved"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full section-card rounded-xl px-5 py-4 text-sm outline-none focus:ring-2 focus:ring-black/10 transition-all duration-300 placeholder:opacity-40"
+                className={inputClass}
                 style={{ backgroundColor: 'hsl(var(--section-light-card))' }}
+                aria-describedby={errors.name ? 'name-error' : undefined}
+                aria-invalid={!!errors.name}
               />
-              {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+              {errors.name && <p id="name-error" className="text-red-500 text-sm mt-1" role="alert">{errors.name}</p>}
             </div>
             <div>
+              <label htmlFor="contact-email" className="block text-xs font-semibold tracking-widest uppercase mb-2 section-muted">
+                Email címed *
+              </label>
               <input
+                id="contact-email"
                 type="email"
-                placeholder="Email címed"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full section-card rounded-xl px-5 py-4 text-sm outline-none focus:ring-2 focus:ring-black/10 transition-all duration-300 placeholder:opacity-40"
+                className={inputClass}
                 style={{ backgroundColor: 'hsl(var(--section-light-card))' }}
+                aria-describedby={errors.email ? 'email-error' : undefined}
+                aria-invalid={!!errors.email}
               />
-              {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+              {errors.email && <p id="email-error" className="text-red-500 text-sm mt-1" role="alert">{errors.email}</p>}
             </div>
             <div>
+              <label htmlFor="contact-message" className="block text-xs font-semibold tracking-widest uppercase mb-2 section-muted">
+                Üzeneted *
+              </label>
               <textarea
-                placeholder="Üzeneted"
+                id="contact-message"
                 rows={5}
                 value={form.message}
                 onChange={(e) => setForm({ ...form, message: e.target.value })}
-                className="w-full section-card rounded-xl px-5 py-4 text-sm outline-none resize-none focus:ring-2 focus:ring-black/10 transition-all duration-300 placeholder:opacity-40"
+                className={`${inputClass} resize-none`}
                 style={{ backgroundColor: 'hsl(var(--section-light-card))' }}
+                aria-describedby={errors.message ? 'message-error' : undefined}
+                aria-invalid={!!errors.message}
               />
-              {errors.message && <p className="text-red-500 text-sm mt-1">{errors.message}</p>}
+              {errors.message && <p id="message-error" className="text-red-500 text-sm mt-1" role="alert">{errors.message}</p>}
             </div>
             <button
               type="submit"
               disabled={sending}
-              className="px-10 py-4 bg-black text-white rounded-full text-sm font-medium tracking-wide hover:bg-black/85 transition-all duration-300 disabled:opacity-50"
+              className="px-10 py-4 bg-black text-white rounded-full text-sm font-medium tracking-wide hover:bg-black/85 transition-all duration-300 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
             >
-              {sending ? 'Küldés...' : 'Üzenet küldése'}
+              {sending ? 'Küldés...' : 'Üzenet küldése →'}
             </button>
           </motion.form>
         </div>

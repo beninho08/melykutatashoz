@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 
-const NoiseOverlay = () => {
+interface NoiseOverlayProps {
+  opacity?: number;
+}
+
+const NoiseOverlay = ({ opacity = 0.3 }: NoiseOverlayProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -10,10 +14,6 @@ const NoiseOverlay = () => {
     if (!ctx) return;
 
     let animationId: number;
-    let lastTime = 0;
-    const FPS = 0; // 0 = statikus zaj (nincs animáció)
-    const interval = FPS > 0 ? 1000 / FPS : 0;
-
     const SCALE = 3;
 
     const drawOneFrame = () => {
@@ -26,7 +26,7 @@ const NoiseOverlay = () => {
         data[i] = v;
         data[i + 1] = v;
         data[i + 2] = v;
-        data[i + 3] = (Math.random() * 65) | 0; // 0-65 alpha
+        data[i + 3] = (Math.random() * 65) | 0;
       }
       ctx.putImageData(imageData, 0, 0);
     };
@@ -37,22 +37,11 @@ const NoiseOverlay = () => {
       const h = parent ? parent.clientHeight : window.innerHeight;
       canvas.width = Math.floor(w / SCALE);
       canvas.height = Math.floor(h / SCALE);
-      if (FPS === 0) drawOneFrame();
-    };
-
-    const drawNoise = (timestamp: number) => {
-      if (FPS === 0) {
-        drawOneFrame();
-        return;
-      }
-      animationId = requestAnimationFrame(drawNoise);
-      if (timestamp - lastTime < interval) return;
-      lastTime = timestamp;
       drawOneFrame();
     };
 
     resize();
-    animationId = requestAnimationFrame(drawNoise);
+    animationId = requestAnimationFrame(() => {});
     window.addEventListener("resize", resize);
 
     return () => {
@@ -72,7 +61,7 @@ const NoiseOverlay = () => {
         height: "100%",
         zIndex: 2,
         pointerEvents: "none",
-        opacity: 0.3,
+        opacity: opacity,
         imageRendering: "pixelated",
         mixBlendMode: "overlay",
       }}

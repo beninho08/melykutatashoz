@@ -1,13 +1,12 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import logo from '@/assets/logo.png';
 
 const Navigation = () => {
   const [scrolled, setScrolled] = useState(false);
   const [isInDarkSection, setIsInDarkSection] = useState(true);
   const location = useLocation();
-  const navigate = useNavigate();
   const isBridgePage = location.pathname === '/hidmunka';
 
   useEffect(() => {
@@ -30,19 +29,24 @@ const Navigation = () => {
 
   const textColor = (isInDarkSection && !isBridgePage) ? 'text-white' : 'text-slate-900';
   const mutedColor = (isInDarkSection && !isBridgePage) ? 'text-white/60 hover:text-white' : 'text-slate-600 hover:text-slate-900';
-  const bgClass = scrolled || isBridgePage ? (isInDarkSection && !isBridgePage ? 'bg-[#0a1124]/80 backdrop-blur-md' : 'bg-white/80 backdrop-blur-md') : 'bg-transparent';
+
+  // FIX: fehér rész hátterét pontosan a section-light-bg-hez igazítjuk
+  const bgClass = scrolled || isBridgePage
+    ? (isInDarkSection && !isBridgePage)
+      ? 'bg-[hsl(220,40%,13%)]/80 backdrop-blur-md'
+      : 'bg-[hsl(0,0%,97%)]/90 backdrop-blur-md'
+    : 'bg-transparent';
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${bgClass}`}>
-      {/* JAVÍTÁS: py-4 - a korábbi py-8 helyett, hogy közelebb kerüljön a tartalomhoz */}
       <div className="w-full px-6 md:px-10 py-4 flex items-center justify-between">
-        
+
         <div className="flex items-center">
           <a href="/" className={`flex items-center text-3xl md:text-4xl font-bold tracking-tighter transition-colors duration-500 ${textColor}`}>
             <span>dent</span>
-            <motion.img 
-              src={logo} 
-              alt="Á" 
+            <motion.img
+              src={logo}
+              alt="Á"
               className="h-10 md:h-14 w-auto mx-1 -translate-y-1.5 md:-translate-y-2"
               style={{ filter: (isInDarkSection && !isBridgePage) ? 'brightness(0) invert(1)' : 'brightness(0)' }}
               initial={{ scale: 0, rotate: -20 }}
