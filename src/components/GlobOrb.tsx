@@ -1,22 +1,21 @@
 /**
- * GlobOrb.tsx – Teljes újraírás
+ * GlobOrb.tsx – FIX: immediateRender: false + gsap.set() footer init
+ *
+ * ROOT CAUSE FIX:
+ *  - fromTo() + immediateRender:true alapból AZONNAL ráírja a "from" értékeket
+ *  - Ezért a footer fromTo initkor már beállítja screenY=height*1.2, morph=0
+ *    MIELŐTT a hero animáció elkezdődne
+ *  - Megoldás: gsap.set() a footer onEnter-ben + to() tween + immediateRender: false
  *
  * LOGIKA:
  *  morph 1.0 = fog alak  (toothPos)
  *  morph 0.0 = gömb alak (spherePos)
  *
  * FLOW:
- *  1. Oldal betölt → GLB tölt → fog látszik (hero jobb oldalán)
- *  2. Hero scrollozás (hero 250vh magas):
- *     0–40%  : fog áll, forog, jól látható
- *     40–70% : fog → gömb morph
- *     70–100%: gömb zsugorodik bal-alsó sarokba, elfogy
- *  3. Footer belép → alulról fade-in, gömb → fog visszaépül, fix középre kerül
- *  4. Footer végig visible → fog megmarad ott, NEM mozdul
- *
- * NAVBAR FIX:
- *  A Navigation.tsx a #hero section.section-dark osztályát nézi,
- *  nem scrollY-t → soha nem vált fehérre a hero tetején.
+ *  1. GLB betölt → fog látszik hero jobb oldalán (state.morph=1, opacity=0.5)
+ *  2. Hero scroll: fog áll → fog→gömb → sarokba fade
+ *  3. Footer scroll: gsap.set() viewport alatti pozíció + gömb → to() footer közép + fog
+ *  4. Footer végig visible → fog FIX MARAD
  */
 
 import { useEffect, useRef } from 'react';
@@ -28,7 +27,6 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 gsap.registerPlugin(ScrollTrigger);
 
-// ─── Konstansok ───────────────────────────────────────────────────────────────
 const PARTICLE_COUNT = 15_000;
 const DRACO_DECODER  = 'https://www.gstatic.com/draco/versioned/decoders/1.5.5/';
 const SPHERE_RADIUS  = 1.6;
@@ -36,22 +34,17 @@ const FOG_SCALE      = 2.2;
 const CORNER_MARGIN  = 20;
 const CORNER_ICON    = 56;
 
-// ─── Vertex Shader ────────────────────────────────────────────────────────────
-// uProgress=1 → fog (kisebb pontok, sűrűbb)
-// uProgress=0 → gömb (nagyobb, lazább pontok)
 const VERT = /* glsl */ `
   uniform float uProgress;
   uniform float uSize;
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    // fog esetén kicsit nagyobb pontok (1+progress*0.5)
     float sz = uSize * (1.0 + uProgress * 0.5);
     gl_PointSize = sz * (7.5 / -mv.z);
     gl_Position  = projectionMatrix * mv;
   }
 `;
 
-// ─── Fragment Shader ──────────────────────────────────────────────────────────
 const FRAG = /* glsl */ `
   uniform vec3  uColor;
   uniform float uOpacity;
@@ -59,13 +52,11 @@ const FRAG = /* glsl */ `
     vec2  uv    = gl_PointCoord - 0.5;
     float dist  = length(uv);
     if (dist > 0.5) discard;
-    // lágyan kifutó korong
     float alpha = smoothstep(0.5, 0.05, dist) * uOpacity;
     gl_FragColor = vec4(uColor, alpha);
   }
 `;
 
-// ─── Segéd: gömb seed pozíciók ────────────────────────────────────────────────
 function buildSpherePositions(count: number): Float32Array {
   const arr = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
@@ -79,12 +70,10 @@ function buildSpherePositions(count: number): Float32Array {
   return arr;
 }
 
-// ─── Segéd: eased morph érték ─────────────────────────────────────────────────
 function cubicInOut(p: number): number {
   return p < 0.5 ? 4*p*p*p : 1 - Math.pow(-2*p + 2, 3) / 2;
 }
 
-// ─── Komponens ────────────────────────────────────────────────────────────────
 const GlobOrb = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -92,10 +81,8 @@ const GlobOrb = () => {
     const container = canvasRef.current;
     if (!container) return;
 
-    // ── Méretek ──
     const sizes = { width: window.innerWidth, height: window.innerHeight };
 
-    // ── Renderer ──
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
@@ -111,21 +98,14 @@ const GlobOrb = () => {
     });
     container.appendChild(renderer.domElement);
 
-    // ── Scene / Camera ──
     const scene  = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(38, sizes.width / sizes.height, 0.1, 100);
     camera.position.set(0, 0, 9);
     scene.add(camera);
 
-    // ── Partikulák: 3 buffer ──
-    // spherePos : gömb alak  (morph=0 végpont)
-    // toothPos  : fog alak   (morph=1 végpont, GLB-ből töltjük)
-    // livePos   : GPU-ra megy (dinamikusan frissítjük)
     const spherePos = buildSpherePositions(PARTICLE_COUNT);
-    const toothPos  = new Float32Array(PARTICLE_COUNT * 3); // majd GLB-ből
+    const toothPos  = new Float32Array(PARTICLE_COUNT * 3);
     const livePos   = new Float32Array(PARTICLE_COUNT * 3);
-
-    // Induláskor a livePos = spherePos (fallback, amíg GLB be nem tölt)
     livePos.set(spherePos);
 
     const geometry = new THREE.BufferGeometry();
@@ -134,13 +114,11 @@ const GlobOrb = () => {
       new THREE.BufferAttribute(livePos, 3).setUsage(THREE.DynamicDrawUsage)
     );
 
-    // ── Material ──
-    // uOpacity=0 induláskor → fog betöltéséig láthatatlan (nincs random gömb-villanás!)
     const material = new THREE.ShaderMaterial({
       uniforms: {
-        uProgress: { value: 1.0 },           // fog alap
-        uColor:    { value: new THREE.Color('#dce6f0') }, // kékes-fehér
-        uOpacity:  { value: 0.0 },           // !! láthatatlan induláskor
+        uProgress: { value: 1.0 },
+        uColor:    { value: new THREE.Color('#dce6f0') },
+        uOpacity:  { value: 0.0 },
         uSize:     { value: renderer.getPixelRatio() > 1 ? 2.5 : 2.1 },
       },
       vertexShader:   VERT,
@@ -154,21 +132,15 @@ const GlobOrb = () => {
     group.add(new THREE.Points(geometry, material));
     scene.add(group);
 
-    // ── Animáció state (GSAP ezt tweeneli) ──
-    // Képernyő-koordinátákban dolgozunk (px), a render loop konvertálja 3D-be
+    // ── STATE: GLB betöltés előtt beállítjuk a hero pozíciót ──
     const state = {
-      screenX:    sizes.width  * 0.72,  // fog hero pozíció
-      screenY:    sizes.height * 0.46,
-      scale:      1.2,
-      morph:      1.0,                  // 1=fog, 0=gömb
-      opacity:    0.0,                  // GLB betöltésig 0
-      // footer státusz: ha true, a fog fix pozícióban marad
-      footerLocked: false,
-      footerX:    0,
-      footerY:    0,
+      screenX:  sizes.width  * 0.72,
+      screenY:  sizes.height * 0.46,
+      scale:    1.2,
+      morph:    1.0,
+      opacity:  0.0,
     };
 
-    // ── Segéd: screen → 3D world koordináta ──
     const toWorld = (sx: number, sy: number) => {
       const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * camera.position.z;
       const halfW = halfH * (sizes.width / sizes.height);
@@ -178,7 +150,6 @@ const GlobOrb = () => {
       };
     };
 
-    // ── Azonnali snap (LERP nélkül) ──
     const snapToState = () => {
       const wp = toWorld(state.screenX, state.screenY);
       group.position.x = wp.x;
@@ -186,26 +157,21 @@ const GlobOrb = () => {
       group.scale.setScalar(state.scale);
     };
 
-    // ── Bal-alsó sarok képernyő-koordinátái ──
     const getCorner = () => ({
       x: CORNER_MARGIN + CORNER_ICON / 2,
       y: window.innerHeight - CORNER_MARGIN - CORNER_ICON / 2,
     });
 
-    // ── Footer fog pozíció kiszámítása ──
-    // A footer közepére kerül, de a viewport tetején mért Y alapján
     const getFooterCenter = () => {
       const footer = document.querySelector('footer');
       if (!footer) return { x: sizes.width * 0.5, y: sizes.height * 0.5 };
       const rect = footer.getBoundingClientRect();
-      // Footer belső Y-ja viewport-hoz képest: közepe körülbelül 40%-nál
-      const y = rect.top + rect.height * 0.40;
-      return { x: sizes.width * 0.5, y };
+      return { x: sizes.width * 0.5, y: rect.top + rect.height * 0.40 };
     };
 
-    // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
     // GLB betöltés
-    // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
     let glbLoaded = false;
 
     const draco = new DRACOLoader();
@@ -216,7 +182,6 @@ const GlobOrb = () => {
     loader.load(
       '/sajat-fogam.glb',
       (gltf) => {
-        // Összes vertex összegyűjtése world space-ben
         const allVerts: THREE.Vector3[] = [];
         gltf.scene.traverse((child) => {
           const mesh = child as THREE.Mesh;
@@ -243,7 +208,6 @@ const GlobOrb = () => {
           return;
         }
 
-        // Bounding box → normalizálás FOG_SCALE méretbe
         let mnX=Infinity, mxX=-Infinity;
         let mnY=Infinity, mxY=-Infinity;
         let mnZ=Infinity, mxZ=-Infinity;
@@ -257,7 +221,6 @@ const GlobOrb = () => {
         const cz  = (mnZ + mxZ) / 2;
         const sc  = FOG_SCALE / Math.max(mxX-mnX, mxY-mnY, mxZ-mnZ);
 
-        // toothPos feltöltése (egyenletesen mintavételezve)
         const step = Math.max(1, Math.floor(allVerts.length / PARTICLE_COUNT));
         let vi = 0;
         for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -269,7 +232,6 @@ const GlobOrb = () => {
           if (vi >= allVerts.length) vi = 0;
         }
 
-        // livePos = fog pozíció azonnal (morph=1)
         for (let i = 0; i < PARTICLE_COUNT; i++) {
           livePos[i*3]   = toothPos[i*3];
           livePos[i*3+1] = toothPos[i*3+1];
@@ -278,13 +240,12 @@ const GlobOrb = () => {
         geometry.attributes.position.needsUpdate = true;
         glbLoaded = true;
 
-        // Azonnali pozíció (ne LERP-eljen a semmibe)
         snapToState();
 
-        // ScrollTrigger frissítés (hero magasság most már stabil)
+        // !! KRITIKUS: ScrollTrigger.refresh() a GLB után
         ScrollTrigger.refresh();
 
-        // Fog megjelenik: lassú fade-in
+        // Fade-in
         gsap.to(state, {
           opacity: 0.50,
           duration: 1.4,
@@ -295,23 +256,12 @@ const GlobOrb = () => {
       (err) => console.error('GlobOrb GLB hiba:', err)
     );
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // GSAP ScrollTrigger animációk
-    // Lenis smooth scroll miatt NEM használunk pin:true-t!
-    // A #hero section 250vh magas → elég scroll távolság a 3 fázisnak.
-    // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+    // GSAP ScrollTriggers – CSAK to() tweeneket használunk!
+    // ────────────────────────────────────────────────────────────────────────
     const ctx = gsap.context(() => {
 
-      // ── HERO animáció ─────────────────────────────────────────────────────
-      // trigger: #hero (250vh magas section)
-      // start: teteje a viewport tetején
-      // end:   alja a viewport tetején
-      // → teljes 250vh scrollozás alatt fut le
-      //
-      // Fázis 1 (0–40%):  fog forog a hero jobb oldalán, mozdulatlan
-      // Fázis 2 (40–72%): fog → gömb átalakulás, helyben
-      // Fázis 3 (72–100%): gömb zsugorodik bal-alsó sarokba + fade out
-
+      // ── HERO ──────────────────────────────────────────────────────────────
       const heroTl = gsap.timeline({
         scrollTrigger: {
           trigger: '#hero',
@@ -322,45 +272,44 @@ const GlobOrb = () => {
         },
       });
 
-      // Fázis 1: fog marad (0.40 duration = 40%)
+      // Fázis 1: fog marad
       heroTl.to(state, {
-        screenX:    () => sizes.width  * 0.72,
-        screenY:    () => sizes.height * 0.46,
-        scale:      1.2,
-        morph:      1.0,
-        opacity:    0.50,
-        duration:   0.40,
-        ease:       'none',
+        screenX:  () => sizes.width  * 0.72,
+        screenY:  () => sizes.height * 0.46,
+        scale:    1.2,
+        morph:    1.0,
+        opacity:  0.50,
+        duration: 0.40,
+        ease:     'none',
       });
 
-      // Fázis 2: fog → gömb (0.32 duration = 32%)
+      // Fázis 2: fog → gömb
       heroTl.to(state, {
-        screenX:    () => sizes.width  * 0.72,
-        screenY:    () => sizes.height * 0.46,
-        scale:      1.05,
-        morph:      0.0,
-        opacity:    0.45,
-        duration:   0.32,
-        ease:       'power2.inOut',
+        screenX:  () => sizes.width  * 0.72,
+        screenY:  () => sizes.height * 0.46,
+        scale:    1.05,
+        morph:    0.0,
+        opacity:  0.45,
+        duration: 0.32,
+        ease:     'power2.inOut',
       });
 
-      // Fázis 3: sarokba + eltűnik (0.28 duration = 28%)
+      // Fázis 3: sarokba + eltűnik
       heroTl.to(state, {
-        screenX:    () => getCorner().x,
-        screenY:    () => getCorner().y,
-        scale:      0.09,
-        morph:      0.0,
-        opacity:    0.0,
-        duration:   0.28,
-        ease:       'power3.inOut',
+        screenX:  () => getCorner().x,
+        screenY:  () => getCorner().y,
+        scale:    0.09,
+        morph:    0.0,
+        opacity:  0.0,
+        duration: 0.28,
+        ease:     'power3.inOut',
       });
 
-      // ── FOOTER animáció ───────────────────────────────────────────────────
-      // Footer alulról jön be → fog visszaépül és FIX MARAD.
-      // A fromTo biztosítja hogy pontosan tudjuk honnan indul.
-      //
-      // start: footer teteje a viewport 95%-ánál (már belép)
-      // end:   footer teteje a viewport 20%-ánál (jól látható)
+      // ── FOOTER ────────────────────────────────────────────────────────────
+      // KRITIKUS FIX:
+      //  - onEnter-ben gsap.set() beállítja az induló állapotot
+      //  - Ezután a to() tween animál a footer középre
+      //  - Így NEM írja felül a hero state-et initkor!
 
       const footerTl = gsap.timeline({
         scrollTrigger: {
@@ -370,62 +319,42 @@ const GlobOrb = () => {
           scrub:    1.8,
           invalidateOnRefresh: true,
           onEnter: () => {
-            // Biztosítjuk hogy az előző hero animáció ne írja felül
-            state.footerLocked = false;
-          },
-          onLeaveBack: () => {
-            // Ha visszagörgetnek a footer fölé, töröljük a lockot
-            state.footerLocked = false;
-          },
-          onScrubComplete: () => {
-            // Animáció vége: fog fix pozícióban marad
-            if (state.morph > 0.95) {
-              const fc = getFooterCenter();
-              state.footerLocked = true;
-              state.footerX = fc.x;
-              state.footerY = fc.y;
-            }
+            // ELŐBB beállítjuk az induló állapotot (nem tween, csak set)
+            gsap.set(state, {
+              screenX: sizes.width * 0.5,
+              screenY: sizes.height * 1.20, // viewport alatt
+              scale:   0.12,
+              morph:   0.0,
+              opacity: 0.0,
+            });
           },
         },
       });
 
-      footerTl.fromTo(
-        state,
-        // FROM: képernyőn kívülről, sarok méretű, láthatatlan
-        {
-          screenX:  () => sizes.width * 0.5,
-          screenY:  () => sizes.height * 1.20,  // viewport alatt
-          scale:    0.12,
-          morph:    0.0,
-          opacity:  0.0,
-        },
-        // TO: footer közepére, fog méretű, látható
-        {
-          screenX:  () => sizes.width * 0.5,
-          screenY:  () => getFooterCenter().y,
-          scale:    1.15,
-          morph:    1.0,
-          opacity:  0.50,
-          ease:     'power2.out',
-        }
-      );
+      footerTl.to(state, {
+        screenX:  () => sizes.width * 0.5,
+        screenY:  () => getFooterCenter().y,
+        scale:    1.15,
+        morph:    1.0,
+        opacity:  0.50,
+        ease:     'power2.out',
+      });
     });
 
-    // Kis késleltetés utáni refresh (layout stabilitás)
     setTimeout(() => ScrollTrigger.refresh(), 700);
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Stray partikulák: néhány részecske finom lélegző mozgást végez
-    // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+    // Stray particles
+    // ────────────────────────────────────────────────────────────────────────
     const STRAY_COUNT = 18;
     const strayIdx: number[] = [];
     for (let i = 0; i < STRAY_COUNT; i++) {
       strayIdx.push(Math.floor(Math.random() * PARTICLE_COUNT));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
     // Render loop
-    // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
     let animId: number;
     const clock = new THREE.Clock();
 
@@ -434,12 +363,10 @@ const GlobOrb = () => {
       const t   = clock.getElapsedTime();
       const arr = geometry.attributes.position.array as Float32Array;
 
-      // ── morph számítás ──
       const rawP  = THREE.MathUtils.clamp(state.morph, 0, 1);
       const eased = cubicInOut(rawP);
       material.uniforms.uProgress.value = eased;
 
-      // ── partikula pozíciók interpolálása ──
       if (glbLoaded) {
         for (let i = 0; i < PARTICLE_COUNT; i++) {
           const i3 = i * 3;
@@ -449,9 +376,8 @@ const GlobOrb = () => {
         }
       }
 
-      // ── stray mozgás (csak gömb közelében) ──
       if (rawP < 0.80) {
-        const amp = 0.018 * (1 - rawP / 0.80); // gömbhöz közel erősebb
+        const amp = 0.018 * (1 - rawP / 0.80);
         for (const idx of strayIdx) {
           const i3  = idx * 3;
           const bx  = arr[i3], by = arr[i3+1], bz = arr[i3+2];
@@ -465,23 +391,16 @@ const GlobOrb = () => {
 
       geometry.attributes.position.needsUpdate = true;
 
-      // ── opacity smooth follow ──
       material.uniforms.uOpacity.value +=
         (state.opacity - material.uniforms.uOpacity.value) * 0.065;
 
-      // ── forgás (fog esetén lassan, gömb esetén gyorsabban) ──
       if (material.uniforms.uOpacity.value > 0.005) {
         group.rotation.y += 0.0020 * (1 - eased * 0.25);
         group.rotation.x  = Math.sin(t * 0.18) * 0.018 * (1 - eased * 0.6);
       }
 
-      // ── pozíció + méret smooth LERP ──
-      // Ha footer-locked, a fix pozíciót használjuk
-      const targetX = state.footerLocked ? state.footerX : state.screenX;
-      const targetY = state.footerLocked ? state.footerY : state.screenY;
-
-      const wp = toWorld(targetX, targetY);
-      const lf = 0.045; // LERP faktor
+      const wp = toWorld(state.screenX, state.screenY);
+      const lf = 0.045;
 
       group.position.x += (wp.x - group.position.x) * lf;
       group.position.y += (wp.y - group.position.y) * lf;
@@ -494,9 +413,9 @@ const GlobOrb = () => {
 
     tick();
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Resize handler
-    // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────
+    // Resize
+    // ────────────────────────────────────────────────────────────────────────
     const onResize = () => {
       sizes.width  = window.innerWidth;
       sizes.height = window.innerHeight;
@@ -505,7 +424,6 @@ const GlobOrb = () => {
       camera.updateProjectionMatrix();
       renderer.setSize(sizes.width, sizes.height);
 
-      // Ha még a hero tetején vagyunk, snap vissza
       const scrollY = window.scrollY || document.documentElement.scrollTop;
       if (scrollY < 80) {
         state.screenX = sizes.width  * 0.72;
@@ -520,9 +438,6 @@ const GlobOrb = () => {
 
     window.addEventListener('resize', onResize);
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Cleanup
-    // ──────────────────────────────────────────────────────────────────────────
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
